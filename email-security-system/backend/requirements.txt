@@ -1,0 +1,12 @@
+Flask
+SQLAlchemy
+Flask-JWT-Extended
+Flask-Mail
+Flask-CORS
+Flask-SocketIO
+requests
+psycopg2-binary
+python-dotenv
+scikit-learn
+numpy
+eventlet 
