@@ -2,6 +2,20 @@
 
 A comprehensive email security solution that monitors, classifies, and protects against spam, phishing, and other email-based threats. The system fetches emails from configured accounts, analyzes them using machine learning techniques, and provides real-time alerts and a dashboard for monitoring security threats.
 
+## Screenshots
+
+### Security Dashboard
+![Security Dashboard](assets/images/dashboard.png)
+*The main dashboard showing email security metrics and controls*
+
+### Recent Detections
+![Recent Detections](assets/images/detections.png)
+*List of recently detected security threats in emails*
+
+### Spam Test Tool
+![Spam Test Tool](assets/images/spam-test.png)
+*AI-powered tool to analyze text for spam characteristics*
+
 ## Tech Stack
 
 ### Backend
@@ -76,7 +90,24 @@ A comprehensive email security solution that monitors, classifies, and protects 
    CREATE DATABASE emailsec;
    ```
 
-4. Configure email credentials in `backend/app.py` and `backend/email_processor.py`
+4. Configure email credentials in `backend/.env` file with the following variables:
+   ```
+   # Database configuration
+   SQLALCHEMY_DATABASE_URI=postgresql://username:password@localhost:5432/emailsec
+   
+   # JWT configuration
+   JWT_SECRET_KEY=your_jwt_secret_key_here
+   
+   # Email configuration
+   EMAIL_USER=your_email@gmail.com
+   MAIL_PASSWORD=your_app_password_here
+   
+   # OpenAI API configuration
+   OPENAI_API_KEY=your_openai_api_key_here
+   
+   # Security settings
+   SECRET_KEY=your_flask_secret_key_here
+   ```
 
 5. Run the Flask server:
    ```
@@ -108,7 +139,7 @@ A comprehensive email security solution that monitors, classifies, and protects 
 
 ## Security Considerations
 
-- Email credentials are stored in plain text in the code (consider using environment variables)
+- Email credentials should be stored in environment variables (see backend/.env)
 - JWT secret keys should be changed in production
 - Consider implementing proper authentication for API endpoints
 
