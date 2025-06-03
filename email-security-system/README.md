@@ -1,6 +1,110 @@
 # Email Security System
 
-A comprehensive email security solution that monitors, classifies, and protects against spam, phishing, and other email-based threats. The system fetches emails from configured accounts, analyzes them using machine learning techniques, and provides real-time alerts and a dashboard for monitoring security threats.
+A full-stack application for monitoring and securing email communications. Features include spam detection, phishing detection, and a real-time security dashboard.
+
+## Features
+
+- Real-time email monitoring
+- Spam and phishing detection
+- Security dashboard with metrics
+- Email categorization and management
+- WebSocket-based real-time updates
+
+## Technology Stack
+
+- **Backend**: Flask, SQLAlchemy, Socket.IO
+- **Frontend**: Next.js, React, TypeScript, Tailwind CSS
+- **ML**: Scikit-learn for spam/phishing detection
+- **Database**: SQLite (can be configured for other databases)
+- **Docker**: Containerized deployment
+
+## Setup
+
+### Environment Variables
+
+1. Copy the example environment file:
+   ```
+   cp .env.example .env
+   ```
+
+2. Fill in the required environment variables in `.env`:
+   - JWT_SECRET_KEY: Secret key for JWT authentication
+   - EMAIL_USER: Email account for monitoring
+   - MAIL_PASSWORD: Password for the email account
+   - SECRET_KEY: Secret key for Flask and Socket.IO
+   - OPENAI_API_KEY: (Optional) If using OpenAI features
+
+### Docker Setup (Recommended)
+
+Build and run using Docker Compose:
+
+```bash
+docker-compose up --build
+```
+
+The application will be available at:
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:5000
+
+### Manual Setup
+
+#### Backend
+
+1. Set up a Python virtual environment:
+   ```bash
+   cd backend
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. Run the Flask application:
+   ```bash
+   flask run
+   ```
+
+#### Frontend
+
+1. Install Node.js dependencies:
+   ```bash
+   cd next-frontend
+   npm install
+   ```
+
+2. Create `.env.local` file with:
+   ```
+   NEXT_PUBLIC_API_URL=http://localhost:5000
+   ```
+
+3. Run the development server:
+   ```bash
+   npm run dev
+   ```
+
+## Development
+
+### Adding Sample Data
+
+Visit `http://localhost:5000/add-sample-data` to add sample emails to the database.
+
+### Email Processing
+
+The email processor can be configured through the dashboard interface or by calling:
+```
+POST /run-email-processor
+```
+with JSON parameters to customize the fetch criteria.
+
+## Security Notes
+
+- All sensitive information is stored in environment variables
+- No hardcoded credentials in the codebase
+- Authentication is required for all API endpoints
+- Real-time monitoring of phishing attempts
 
 ## Screenshots
 

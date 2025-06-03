@@ -1,2 +1,70 @@
 # Environment variables
-backend/.env 
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+next-frontend/.env
+next-frontend/.env.*
+!next-frontend/.env.example
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Database files
+backend/emails.db
+backend/instance/
+*.db
+*.db-journal
+backend/emails_output.txt
+
+# Next.js
+next-frontend/.next/
+next-frontend/out/
+next-frontend/node_modules/
+next-frontend/.vercel
+next-frontend/build
+next-frontend/.turbo
+
+# Node.js
+node_modules/
+npm-debug.log
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Docker
+.docker/
+docker-compose.override.yml
+
+# IDE files
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw? 

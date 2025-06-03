@@ -10,6 +10,9 @@ import RecentDetections from './recent-detections';
 import SecurityMetricCard from '../components/security-metric-card';
 import EmailProcessorControl from '../components/email-processor-control';
 
+// API URL from environment variables
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
 interface Email {
   id: number;
   sender: string;
@@ -33,7 +36,7 @@ const SecurityDashboard = () => {
 
   // WebSocket initialization with error handling
   useEffect(() => {
-    const newSocket = io('http://localhost:5000/emails', {
+    const newSocket = io(`${API_URL}/emails`, {
       path: '/socket.io',
       transports: ['websocket'],
       auth: {
@@ -85,7 +88,7 @@ const SecurityDashboard = () => {
     
     const fetchEmails = async () => {
       try {
-        const response = await fetch('http://localhost:5000/emails', {
+        const response = await fetch(`${API_URL}/emails`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
           },
@@ -112,7 +115,7 @@ const SecurityDashboard = () => {
   const refreshEmails = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:5000/emails', {
+      const response = await fetch(`${API_URL}/emails`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -131,7 +134,7 @@ const SecurityDashboard = () => {
   // Email marking functionality
   const markAsImportant = async (emailId: number) => {
     try {
-      const response = await fetch(`http://localhost:5000/emails/${emailId}/mark-important`, {
+      const response = await fetch(`${API_URL}/emails/${emailId}/mark-important`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -149,7 +152,7 @@ const SecurityDashboard = () => {
   // Archive email functionality
   const toggleArchive = async (emailId: number) => {
     try {
-      const response = await fetch(`http://localhost:5000/emails/${emailId}/toggle-archive`, {
+      const response = await fetch(`${API_URL}/emails/${emailId}/toggle-archive`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -167,7 +170,7 @@ const SecurityDashboard = () => {
   // Toggle read status functionality
   const toggleRead = async (emailId: number) => {
     try {
-      const response = await fetch(`http://localhost:5000/emails/${emailId}/toggle-read`, {
+      const response = await fetch(`${API_URL}/emails/${emailId}/toggle-read`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -185,7 +188,7 @@ const SecurityDashboard = () => {
   // Delete email functionality
   const deleteEmail = async (emailId: number) => {
     try {
-      const response = await fetch(`http://localhost:5000/emails/${emailId}`, {
+      const response = await fetch(`${API_URL}/emails/${emailId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`

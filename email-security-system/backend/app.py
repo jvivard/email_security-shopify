@@ -1,7 +1,35 @@
 import os
+import sys
 from dotenv import load_dotenv
+import logging
 
-load_dotenv() # Load environment variables from .env file
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger('app')
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Check for required environment variables
+required_env_vars = [
+    'SQLALCHEMY_DATABASE_URI',
+    'JWT_SECRET_KEY',
+    'EMAIL_USER',
+    'MAIL_PASSWORD',
+    'SECRET_KEY'
+]
+
+missing_vars = [var for var in required_env_vars if not os.getenv(var)]
+if missing_vars:
+    logger.error(f"Missing required environment variables: {', '.join(missing_vars)}")
+    logger.error("Please create a .env file with the required variables or set them in your environment.")
+    # Continue with defaults for development, but log warnings
 
 from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
@@ -19,15 +47,23 @@ import json
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}}, supports_credentials=True)
 
+# Helper function to handle CORS options requests
+def handle_cors_options(allowed_methods):
+    response = app.make_default_options_response()
+    response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
+    response.headers['Access-Control-Allow-Methods'] = allowed_methods
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    return response
+
 # Configuration
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI', 'postgresql://postgres:Kickrobotic123%40@localhost:5432/emailsec')
-app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'a3dcb4d229de6fde0db5686dee47145e3a8f2f5c1b9d3e4f6c7a8b9c0d1e2f3g')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI')
+app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY')
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USERNAME'] = os.getenv('EMAIL_USER', 'wwe2k14matches@gmail.com')
-app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD', 'vgxj jbvl iacd vqig')
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'super-secret-key-for-socketio')
+app.config['MAIL_USERNAME'] = os.getenv('EMAIL_USER')
+app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
 
 # Initialize extensions
 db = SQLAlchemy(app)
@@ -84,11 +120,7 @@ def handle_disconnect():
 @app.route('/emails', methods=['OPTIONS', 'GET'])
 def get_emails():
     if request.method == 'OPTIONS':
-        response = app.make_default_options_response()
-        response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
-        response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-        return response
+        return handle_cors_options('GET, OPTIONS')
 
     emails = Email.query.all()
     return jsonify([e.serialize() for e in emails])
@@ -97,11 +129,7 @@ def get_emails():
 @app.route('/emails/<int:email_id>/mark-important', methods=['OPTIONS', 'PUT'])
 def mark_email_important(email_id):
     if request.method == 'OPTIONS':
-        response = app.make_default_options_response()
-        response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
-        response.headers['Access-Control-Allow-Methods'] = 'PUT, OPTIONS'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-        return response
+        return handle_cors_options('PUT, OPTIONS')
     
     email = Email.query.get(email_id)
     if not email:
@@ -120,11 +148,7 @@ def mark_email_important(email_id):
 @app.route('/emails/<int:email_id>/toggle-archive', methods=['OPTIONS', 'PUT'])
 def toggle_archive_email(email_id):
     if request.method == 'OPTIONS':
-        response = app.make_default_options_response()
-        response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
-        response.headers['Access-Control-Allow-Methods'] = 'PUT, OPTIONS'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-        return response
+        return handle_cors_options('PUT, OPTIONS')
     
     email = Email.query.get(email_id)
     if not email:
@@ -143,11 +167,7 @@ def toggle_archive_email(email_id):
 @app.route('/emails/<int:email_id>/toggle-read', methods=['OPTIONS', 'PUT'])
 def toggle_read_email(email_id):
     if request.method == 'OPTIONS':
-        response = app.make_default_options_response()
-        response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
-        response.headers['Access-Control-Allow-Methods'] = 'PUT, OPTIONS'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-        return response
+        return handle_cors_options('PUT, OPTIONS')
     
     email = Email.query.get(email_id)
     if not email:
@@ -166,11 +186,7 @@ def toggle_read_email(email_id):
 @app.route('/emails/<int:email_id>', methods=['OPTIONS', 'DELETE'])
 def delete_email(email_id):
     if request.method == 'OPTIONS':
-        response = app.make_default_options_response()
-        response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
-        response.headers['Access-Control-Allow-Methods'] = 'DELETE, OPTIONS'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-        return response
+        return handle_cors_options('DELETE, OPTIONS')
     
     email = Email.query.get(email_id)
     if not email:
@@ -289,11 +305,7 @@ def add_sample_data():
 @app.route('/test-spam', methods=['OPTIONS', 'POST'])
 def test_spam():
     if request.method == 'OPTIONS':
-        response = app.make_default_options_response()
-        response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
-        response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-        return response
+        return handle_cors_options('POST, OPTIONS')
     
     # Get text from request
     data = request.get_json()
@@ -303,7 +315,9 @@ def test_spam():
     text_to_analyze = data['text']
     
     # OpenAI API configuration
-    openai_api_key = os.getenv('OPENAI_API_KEY', "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")
+    openai_api_key = os.getenv('OPENAI_API_KEY')
+    if not openai_api_key:
+        return jsonify({'error': 'OpenAI API key not configured. Please set the OPENAI_API_KEY environment variable.'}), 503
     
     # Prepare request to OpenAI API
     headers = {
