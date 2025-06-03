@@ -99,6 +99,10 @@ POST /run-email-processor
 ```
 with JSON parameters to customize the fetch criteria.
 
+### Code Style
+
+This project uses a consistent code style. Please ensure your contributions adhere to it.
+
 ## Security Notes
 
 - All sensitive information is stored in environment variables
