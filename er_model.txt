@@ -1,0 +1,136 @@
+# Email Security System ER Model
+
+## Entities and Attributes
+
+### Email
+- **id** (PK) SERIAL
+- **sender** VARCHAR(255) NOT NULL
+- **subject** VARCHAR(255)
+- **body** TEXT
+- **received_at** TIMESTAMP
+- **email_date** TIMESTAMP
+- **is_spam** BOOLEAN
+- **is_phishing** BOOLEAN
+- **category** VARCHAR(50)
+- **is_important** BOOLEAN
+- **is_archived** BOOLEAN
+- **is_read** BOOLEAN
+
+### Blacklist
+- **id** (PK) SERIAL
+- **entity** VARCHAR(255) UNIQUE NOT NULL
+- **reason** VARCHAR(255)
+- **added_at** TIMESTAMP
+
+### SenderAnalytics
+- **id** (PK) SERIAL
+- **sender** VARCHAR(255) NOT NULL
+- **email_count** INTEGER
+- **spam_count** INTEGER
+- **phishing_count** INTEGER
+- **last_seen** TIMESTAMP
+
+## Relationships
+
+1. **Email to SenderAnalytics**: Many-to-One
+   - An email has one sender that appears in sender_analytics
+   - A sender in sender_analytics can be associated with many emails
+   - Relationship: "is sent by" / "sends"
+   - Foreign Key: Email.sender references SenderAnalytics.sender
+
+2. **Email to Blacklist**: Many-to-Many (implicit)
+   - An email can be from a sender or domain that appears in the blacklist
+   - A blacklisted entity can be associated with multiple emails
+   - This is an implicit relationship based on string matching operations
+   - No explicit foreign key, but connected through SUBSTRING(email.sender)
+
+## ER Diagram (Text Representation)
+
+```
++---------------+          +-------------------+
+|               |          |                   |
+|     Email     |          | SenderAnalytics   |
+|               |          |                   |
++---------------+          +-------------------+
+| PK id         |          | PK id             |
+| sender        |--------->| sender            |
+| subject       |          | email_count       |
+| body          |          | spam_count        |
+| received_at   |          | phishing_count    |
+| email_date    |          | last_seen         |
+| is_spam       |          |                   |
+| is_phishing   |          +-------------------+
+| category      |                   
+| is_important  |          +-------------------+
+| is_archived   |          |                   |
+| is_read       |---.      |    Blacklist      |
+|               |    \     |                   |
++---------------+     \    +-------------------+
+                       \-->| PK id             |
+                           | entity            |
+                           | reason            |
+                           | added_at          |
+                           |                   |
+                           +-------------------+
+```
+
+## PlantUML Representation
+For a proper diagram, you can use this PlantUML code:
+
+```
+@startuml Email Security System ER Diagram
+
+entity "Email" as email {
+  * id : SERIAL <<PK>>
+  --
+  * sender : VARCHAR(255)
+  subject : VARCHAR(255)
+  body : TEXT
+  received_at : TIMESTAMP
+  email_date : TIMESTAMP
+  is_spam : BOOLEAN
+  is_phishing : BOOLEAN
+  category : VARCHAR(50)
+  is_important : BOOLEAN
+  is_archived : BOOLEAN
+  is_read : BOOLEAN
+}
+
+entity "Blacklist" as blacklist {
+  * id : SERIAL <<PK>>
+  --
+  * entity : VARCHAR(255) <<unique>>
+  reason : VARCHAR(255)
+  added_at : TIMESTAMP
+}
+
+entity "SenderAnalytics" as analytics {
+  * id : SERIAL <<PK>>
+  --
+  * sender : VARCHAR(255)
+  email_count : INTEGER
+  spam_count : INTEGER
+  phishing_count : INTEGER
+  last_seen : TIMESTAMP
+}
+
+email ||--o{ analytics : "has sender in"
+email ..> blacklist : "may be from\nblacklisted entity"
+
+@enduml
+```
+
+## Implementation Notes
+
+1. The relationship between Email and SenderAnalytics is logically based on the sender field, though not explicitly defined as a foreign key in the schema.
+
+2. The connection between Email and Blacklist is implemented through query-time checks (JOIN conditions) rather than foreign keys, as shown in queries like:
+   ```sql
+   SELECT e.*
+   FROM emails e
+   JOIN blacklist b ON SUBSTRING(e.sender FROM POSITION('@' IN e.sender) + 1) = b.entity;
+   ```
+
+3. Indexes are created on commonly queried fields in the Email table to improve performance, particularly for filtering operations.
+
+4. The schema uses boolean flags (is_spam, is_phishing, is_important, etc.) to support efficient filtering of emails. 
