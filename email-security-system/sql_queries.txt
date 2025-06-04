@@ -1,0 +1,184 @@
+-- SQL QUERIES FOR EMAIL SECURITY SYSTEM
+
+-- TABLE CREATION SYNTAX
+-- 1. Emails table
+CREATE TABLE emails (
+    id SERIAL PRIMARY KEY,
+    sender VARCHAR(255) NOT NULL,
+    subject VARCHAR(255),
+    body TEXT,
+    received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    email_date TIMESTAMP,
+    is_spam BOOLEAN DEFAULT FALSE,
+    is_phishing BOOLEAN DEFAULT FALSE,
+    category VARCHAR(50),
+    is_important BOOLEAN DEFAULT FALSE,
+    is_archived BOOLEAN DEFAULT FALSE,
+    is_read BOOLEAN DEFAULT FALSE
+);
+
+-- Add indexes on common query fields
+CREATE INDEX idx_email_is_spam ON emails(is_spam);
+CREATE INDEX idx_email_is_phishing ON emails(is_phishing);
+CREATE INDEX idx_email_category ON emails(category);
+CREATE INDEX idx_email_received_at ON emails(received_at);
+CREATE INDEX idx_email_is_important ON emails(is_important);
+CREATE INDEX idx_email_is_archived ON emails(is_archived);
+CREATE INDEX idx_email_is_read ON emails(is_read);
+
+-- 2. Blacklist table
+CREATE TABLE blacklist (
+    id SERIAL PRIMARY KEY,
+    entity VARCHAR(255) UNIQUE NOT NULL, -- Domain or email address
+    reason VARCHAR(255),
+    added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 3. Sender analytics table
+CREATE TABLE sender_analytics (
+    id SERIAL PRIMARY KEY,
+    sender VARCHAR(255) NOT NULL,
+    email_count INTEGER DEFAULT 1,
+    spam_count INTEGER DEFAULT 0,
+    phishing_count INTEGER DEFAULT 0,
+    last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- BASIC SELECT QUERIES
+-- 1. Get all spam emails
+SELECT * FROM emails WHERE is_spam = TRUE;
+
+-- 2. Get all phishing emails
+SELECT * FROM emails WHERE is_phishing = TRUE;
+
+-- 3. Get all unread important emails
+SELECT * FROM emails WHERE is_important = TRUE AND is_read = FALSE;
+
+-- 4. Get emails received in the last 7 days
+SELECT * FROM emails WHERE received_at >= NOW() - INTERVAL '7 days';
+
+-- 5. Get blacklisted domains only (not individual emails)
+SELECT * FROM blacklist WHERE entity LIKE '%.%' AND entity NOT LIKE '%@%';
+
+-- DATA AGGREGATION
+-- 6. Count emails by category
+SELECT category, COUNT(*) AS email_count 
+FROM emails 
+GROUP BY category;
+
+-- 7. Count emails by spam/phishing status
+SELECT 
+    is_spam, 
+    is_phishing, 
+    COUNT(*) AS email_count 
+FROM emails 
+GROUP BY is_spam, is_phishing;
+
+-- 8. Find top 10 senders by email volume
+SELECT sender, COUNT(*) AS email_count 
+FROM emails 
+GROUP BY sender 
+ORDER BY email_count DESC 
+LIMIT 10;
+
+-- 9. Calculate percentage of spam emails
+SELECT 
+    (COUNT(*) FILTER (WHERE is_spam = TRUE) * 100.0 / COUNT(*)) AS spam_percentage 
+FROM emails;
+
+-- JOIN OPERATIONS
+-- 10. Get emails with sender analytics
+SELECT e.*, sa.email_count, sa.spam_count, sa.phishing_count
+FROM emails e
+JOIN sender_analytics sa ON e.sender = sa.sender;
+
+-- 11. Get emails from blacklisted senders
+SELECT e.*
+FROM emails e
+JOIN blacklist b ON e.sender = b.entity;
+
+-- 12. Get emails from domains in blacklist
+SELECT e.*
+FROM emails e
+JOIN blacklist b ON SUBSTRING(e.sender FROM POSITION('@' IN e.sender) + 1) = b.entity;
+
+-- DATA MANIPULATION
+-- 13. Mark all emails from a specific sender as spam
+UPDATE emails 
+SET is_spam = TRUE 
+WHERE sender = 'suspicious@example.com';
+
+-- 14. Archive all emails older than 30 days
+UPDATE emails 
+SET is_archived = TRUE 
+WHERE received_at < NOW() - INTERVAL '30 days';
+
+-- 15. Add a new blacklisted domain
+INSERT INTO blacklist (entity, reason) 
+VALUES ('malicious-domain.com', 'Known phishing campaigns');
+
+-- ADVANCED QUERIES
+-- 16. Find senders with high spam ratio
+SELECT 
+    sa.sender, 
+    sa.email_count, 
+    sa.spam_count, 
+    (sa.spam_count * 100.0 / sa.email_count) AS spam_percentage
+FROM sender_analytics sa
+WHERE sa.email_count > 5
+AND (sa.spam_count * 100.0 / sa.email_count) > 50
+ORDER BY spam_percentage DESC;
+
+-- 17. Update sender analytics based on email data
+UPDATE sender_analytics sa
+SET 
+    email_count = subquery.email_count,
+    spam_count = subquery.spam_count,
+    phishing_count = subquery.phishing_count,
+    last_seen = subquery.last_seen
+FROM (
+    SELECT 
+        sender,
+        COUNT(*) AS email_count,
+        COUNT(*) FILTER (WHERE is_spam = TRUE) AS spam_count,
+        COUNT(*) FILTER (WHERE is_phishing = TRUE) AS phishing_count,
+        MAX(received_at) AS last_seen
+    FROM emails
+    GROUP BY sender
+) AS subquery
+WHERE sa.sender = subquery.sender;
+
+-- 18. Find potential new spam senders not yet in blacklist
+SELECT 
+    e.sender,
+    COUNT(*) AS email_count,
+    COUNT(*) FILTER (WHERE is_spam = TRUE) AS spam_count
+FROM emails e
+LEFT JOIN blacklist b ON e.sender = b.entity
+WHERE b.entity IS NULL
+GROUP BY e.sender
+HAVING COUNT(*) > 3 AND (COUNT(*) FILTER (WHERE is_spam = TRUE) * 100.0 / COUNT(*)) > 70;
+
+-- 19. Email interaction stats
+SELECT 
+    is_read,
+    is_archived,
+    is_important,
+    COUNT(*) AS email_count
+FROM emails
+GROUP BY is_read, is_archived, is_important
+ORDER BY is_important DESC, is_read DESC, is_archived;
+
+-- 20. Create a view for email summary
+CREATE OR REPLACE VIEW email_summary AS
+SELECT 
+    DATE(received_at) AS date,
+    COUNT(*) AS total_emails,
+    COUNT(*) FILTER (WHERE is_spam = TRUE) AS spam_emails,
+    COUNT(*) FILTER (WHERE is_phishing = TRUE) AS phishing_emails,
+    COUNT(*) FILTER (WHERE is_important = TRUE) AS important_emails,
+    COUNT(*) FILTER (WHERE is_read = TRUE) AS read_emails,
+    COUNT(*) FILTER (WHERE is_archived = TRUE) AS archived_emails
+FROM emails
+GROUP BY date
+ORDER BY date DESC; 
