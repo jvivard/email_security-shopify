@@ -9,6 +9,7 @@ import importlib
 import os
 import logging
 import sys
+import json
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -138,11 +139,24 @@ def fetch_and_process_emails_from_category(category_search, category_name, max_e
         processed_count = 0
         for num in email_ids:
             try:
-                _, msg_data = mail.fetch(num, '(RFC822)')
+                status, msg_data = mail.fetch(num, '(RFC822)')
+                if status != 'OK' or not msg_data or not msg_data[0]:
+                    logger.error(f"Failed to fetch email with ID {num}")
+                    continue
+                    
                 raw_email = msg_data[0][1]
+                if not raw_email:
+                    logger.error(f"No raw email data for ID {num}")
+                    continue
+                
+                # Ensure raw_email is bytes
+                if not isinstance(raw_email, bytes):
+                    logger.error(f"Raw email data is not bytes for ID {num}")
+                    continue
+                    
                 msg = email.message_from_bytes(raw_email, policy=policy.default)
-                sender = msg['From']
-                subject = msg['Subject']
+                sender = msg.get('From', 'Unknown Sender')
+                subject = msg.get('Subject', 'No Subject')
                 
                 logger.info(f"Processing email: {subject}")
                 
@@ -153,6 +167,11 @@ def fetch_and_process_emails_from_category(category_search, category_name, max_e
                 else:
                     html_body = msg.get_body(preferencelist=('html',))
                     body = html_body.get_content() if html_body else ''
+                
+                # Ensure we have a valid body for processing
+                if not body:
+                    logger.warning(f"Could not extract body content from email: {subject}")
+                    body = "No content available"
                 
                 # Extract the email date from the Date header
                 email_date_str = msg.get('Date', '')
@@ -171,6 +190,28 @@ def fetch_and_process_emails_from_category(category_search, category_name, max_e
                 is_spam = prediction == 1
                 is_phishing = prediction == 2
                 
+                # Check for attachments
+                has_dangerous_attachment = False
+                attachment_warnings = []
+                attachment_data = []
+                
+                # Process attachments
+                for part in msg.walk():
+                    if part.get_content_maintype() == 'multipart':
+                        continue
+                    if part.get('Content-Disposition') is None:
+                        continue
+                    if part.get_filename() is not None:
+                        analysis = analyze_attachment(part)
+                        attachment_data.append(analysis)
+                        if not analysis["is_safe"]:
+                            has_dangerous_attachment = True
+                            attachment_warnings.append(f"{analysis['filename']}: {analysis['reason']}")
+                            logger.warning(f"Dangerous attachment found in email: {subject} - {analysis['reason']}")
+                
+                if has_dangerous_attachment:
+                    is_phishing = True  # Mark emails with dangerous attachments as phishing
+                
                 if is_spam:
                     logger.warning(f"Spam detected in email: {subject}")
                 if is_phishing:
@@ -184,7 +225,8 @@ def fetch_and_process_emails_from_category(category_search, category_name, max_e
                     is_spam=is_spam, 
                     is_phishing=is_phishing,
                     category=category_name, 
-                    email_date=email_date
+                    email_date=email_date,
+                    attachment_info=json.dumps(attachment_data) if attachment_data else None
                 )
                 db.session.add(email_record)
                 db.session.commit()
@@ -304,6 +346,56 @@ def process_emails(parameters):
             'success': False,
             'message': f'Error processing emails: {str(e)}'
         }
+
+def analyze_attachment(attachment):
+    """
+    Analyze an email attachment for potential security threats
+    
+    Parameters:
+    - attachment: Email attachment object
+    
+    Returns:
+    - dict with analysis results
+    """
+    try:
+        filename = attachment.get_filename()
+        if not filename:
+            return {"is_safe": True, "reason": "No filename"}
+            
+        content_type = attachment.get_content_type()
+        size = len(attachment.get_payload(decode=True))
+        
+        # Check for potentially dangerous file extensions
+        dangerous_extensions = ['.exe', '.bat', '.cmd', '.msi', '.js', '.vbs', '.ps1', '.jar', '.scr']
+        is_dangerous_ext = any(filename.lower().endswith(ext) for ext in dangerous_extensions)
+        
+        # Check for unusually large attachments (over 10MB)
+        is_large = size > 10 * 1024 * 1024
+        
+        # Check for suspicious content types
+        suspicious_types = ['application/x-msdownload', 'application/x-msdos-program', 'application/x-javascript']
+        is_suspicious_type = content_type in suspicious_types
+        
+        is_safe = not (is_dangerous_ext or is_suspicious_type)
+        
+        reason = []
+        if is_dangerous_ext:
+            reason.append("Potentially dangerous file extension")
+        if is_suspicious_type:
+            reason.append("Suspicious content type")
+        if is_large:
+            reason.append("Unusually large attachment")
+            
+        return {
+            "filename": filename,
+            "content_type": content_type,
+            "size": size,
+            "is_safe": is_safe,
+            "reason": ", ".join(reason) if reason else "No threats detected"
+        }
+    except Exception as e:
+        logger.error(f"Error analyzing attachment: {e}")
+        return {"is_safe": False, "reason": f"Analysis error: {str(e)}"}
 
 if __name__ == '__main__':
     try:
