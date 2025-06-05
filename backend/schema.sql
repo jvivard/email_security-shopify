@@ -13,7 +13,8 @@ CREATE TABLE emails (
     category VARCHAR(50),
     is_important BOOLEAN DEFAULT FALSE,
     is_archived BOOLEAN DEFAULT FALSE,
-    is_read BOOLEAN DEFAULT FALSE
+    is_read BOOLEAN DEFAULT FALSE,
+    attachment_info TEXT
 );
 
 -- Add index on common query fields
@@ -69,6 +70,20 @@ BEGIN
         AND column_name = 'is_read'
     ) THEN
         ALTER TABLE emails ADD COLUMN is_read BOOLEAN DEFAULT FALSE;
+    END IF;
+    
+    -- Check and add attachment_info column if missing
+    IF EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'emails'
+    ) AND NOT EXISTS (
+        SELECT FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'emails' 
+        AND column_name = 'attachment_info'
+    ) THEN
+        ALTER TABLE emails ADD COLUMN attachment_info TEXT;
     END IF;
 END
 $$;
