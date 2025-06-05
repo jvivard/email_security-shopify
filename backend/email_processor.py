@@ -154,6 +154,11 @@ def fetch_and_process_emails_from_category(category_search, category_name, max_e
                     html_body = msg.get_body(preferencelist=('html',))
                     body = html_body.get_content() if html_body else ''
                 
+                # Ensure we have a valid body for processing
+                if not body:
+                    logger.warning(f"Could not extract body content from email: {subject}")
+                    body = "No content available"
+                
                 # Extract the email date from the Date header
                 email_date_str = msg.get('Date', '')
                 if email_date_str:
