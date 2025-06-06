@@ -86,6 +86,7 @@ class Email(db.Model):
     is_important = db.Column(db.Boolean, default=False)
     is_archived = db.Column(db.Boolean, default=False)
     is_read = db.Column(db.Boolean, default=False)
+    attachment_info = db.Column(db.Text)  # Store attachment analysis as JSON string
 
     def serialize(self):
         return {
@@ -98,7 +99,8 @@ class Email(db.Model):
             'email_date': self.email_date.isoformat() if self.email_date else None,
             'is_important': self.is_important,
             'is_archived': self.is_archived,
-            'is_read': self.is_read
+            'is_read': self.is_read,
+            'attachment_info': self.attachment_info
         }
 
 # Database event listener for real-time updates
