@@ -2,6 +2,8 @@ import os
 import sys
 from dotenv import load_dotenv
 import logging
+from flask import Flask, jsonify, request, Response
+from typing import Union, Tuple
 
 # Configure logging
 logging.basicConfig(
@@ -31,7 +33,6 @@ if missing_vars:
     logger.error("Please create a .env file with the required variables or set them in your environment.")
     # Continue with defaults for development, but log warnings
 
-from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_jwt_extended import JWTManager, jwt_required, create_access_token
 from flask_mail import Mail, Message
@@ -86,6 +87,7 @@ class Email(db.Model):
     is_important = db.Column(db.Boolean, default=False)
     is_archived = db.Column(db.Boolean, default=False)
     is_read = db.Column(db.Boolean, default=False)
+    attachment_info = db.Column(db.Text)  # Store attachment analysis as JSON string
 
     def serialize(self):
         return {
@@ -98,7 +100,8 @@ class Email(db.Model):
             'email_date': self.email_date.isoformat() if self.email_date else None,
             'is_important': self.is_important,
             'is_archived': self.is_archived,
-            'is_read': self.is_read
+            'is_read': self.is_read,
+            'attachment_info': self.attachment_info
         }
 
 # Database event listener for real-time updates
@@ -131,18 +134,7 @@ def mark_email_important(email_id):
     if request.method == 'OPTIONS':
         return handle_cors_options('PUT, OPTIONS')
     
-    email = Email.query.get(email_id)
-    if not email:
-        return jsonify({'error': 'Email not found'}), 404
-    
-    # Toggle the is_important flag
-    email.is_important = not email.is_important
-    db.session.commit()
-    
-    # Emit socket event with updated email
-    socketio.emit('email_updated', email.serialize(), namespace='/emails')
-    
-    return jsonify(email.serialize())
+    return update_email_flag(email_id, 'is_important')
 
 # Add endpoint to toggle archive status
 @app.route('/emails/<int:email_id>/toggle-archive', methods=['OPTIONS', 'PUT'])
@@ -150,18 +142,7 @@ def toggle_archive_email(email_id):
     if request.method == 'OPTIONS':
         return handle_cors_options('PUT, OPTIONS')
     
-    email = Email.query.get(email_id)
-    if not email:
-        return jsonify({'error': 'Email not found'}), 404
-    
-    # Toggle the is_archived flag
-    email.is_archived = not email.is_archived
-    db.session.commit()
-    
-    # Emit socket event with updated email
-    socketio.emit('email_updated', email.serialize(), namespace='/emails')
-    
-    return jsonify(email.serialize())
+    return update_email_flag(email_id, 'is_archived')
 
 # Add endpoint to toggle read status
 @app.route('/emails/<int:email_id>/toggle-read', methods=['OPTIONS', 'PUT'])
@@ -169,12 +150,26 @@ def toggle_read_email(email_id):
     if request.method == 'OPTIONS':
         return handle_cors_options('PUT, OPTIONS')
     
+    return update_email_flag(email_id, 'is_read')
+
+# Helper function to update email flags
+def update_email_flag(email_id, flag_name):
+    """
+    Helper function to toggle boolean flags on emails
+    
+    Parameters:
+    - email_id: ID of the email to update
+    - flag_name: Name of the boolean flag to toggle
+    
+    Returns:
+    - JSON response with updated email or error
+    """
     email = Email.query.get(email_id)
     if not email:
         return jsonify({'error': 'Email not found'}), 404
     
-    # Toggle the is_read flag
-    email.is_read = not email.is_read
+    # Toggle the specified flag
+    setattr(email, flag_name, not getattr(email, flag_name))
     db.session.commit()
     
     # Emit socket event with updated email
@@ -221,21 +216,35 @@ def send_alert(email_record):
             'email_id': email_record.id
         }, namespace='/alerts')
 
+# Global error handler
+@app.errorhandler(Exception)
+def handle_exception(e) -> Tuple[Response, int]:
+    """Global error handler for unhandled exceptions"""
+    logger.error(f"Unhandled exception: {str(e)}", exc_info=True)
+    return jsonify({
+        'error': 'An unexpected error occurred',
+        'message': str(e)
+    }), 500
+
 # Add new endpoint to run the email processor with configurable parameters
 @app.route('/run-email-processor', methods=['POST'])
-def run_email_processor():
-    if request.method == 'POST':
-        # Extract parameters from request
-        parameters = request.get_json()
-        if not parameters:
-            return jsonify({'error': 'No parameters provided'}), 400
+def run_email_processor() -> Union[Response, Tuple[Response, int]]:
+    """Run the email processor with configurable parameters"""
+    # Extract parameters from request
+    parameters = request.get_json()
+    if not parameters:
+        return jsonify({'error': 'No parameters provided'}), 400
 
+    try:
         # Import email_processor dynamically to avoid circular imports
         import email_processor
         
         # Run the email processor with the provided parameters
         result = email_processor.process_emails(parameters)
         return jsonify(result)
+    except Exception as e:
+        logger.error(f"Error running email processor: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
 
 # Add new endpoint to add sample data
 @app.route('/add-sample-data', methods=['GET'])
@@ -314,10 +323,39 @@ def test_spam():
     
     text_to_analyze = data['text']
     
+    try:
+        ai_response = analyze_text_with_openai(text_to_analyze, 
+            "You are a spam detection expert. Analyze the following text and determine if it's spam or not. Respond with just 'spam' or 'not spam' followed by a brief explanation.")
+        
+        # Determine if the message is spam based on AI response
+        is_spam = "spam" in ai_response.lower()[:10]
+        
+        return jsonify({
+            'text': text_to_analyze,
+            'is_spam': is_spam,
+            'analysis': ai_response
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+def analyze_text_with_openai(text, system_prompt):
+    """
+    Analyze text using OpenAI API
+    
+    Parameters:
+    - text: The text to analyze
+    - system_prompt: The system prompt to guide the AI's analysis
+    
+    Returns:
+    - AI response as string
+    
+    Raises:
+    - Exception if API call fails
+    """
     # OpenAI API configuration
     openai_api_key = os.getenv('OPENAI_API_KEY')
     if not openai_api_key:
-        return jsonify({'error': 'OpenAI API key not configured. Please set the OPENAI_API_KEY environment variable.'}), 503
+        raise Exception('OpenAI API key not configured. Please set the OPENAI_API_KEY environment variable.')
     
     # Prepare request to OpenAI API
     headers = {
@@ -330,42 +368,29 @@ def test_spam():
         "messages": [
             {
                 "role": "system", 
-                "content": "You are a spam detection expert. Analyze the following text and determine if it's spam or not. Respond with just 'spam' or 'not spam' followed by a brief explanation."
+                "content": system_prompt
             },
             {
                 "role": "user", 
-                "content": text_to_analyze
+                "content": text
             }
         ],
         "temperature": 0.7
     }
     
-    try:
-        # Call OpenAI API
-        response = requests.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers=headers,
-            json=payload
-        )
-        
-        # Process response
-        if response.status_code == 200:
-            result = response.json()
-            ai_response = result['choices'][0]['message']['content']
-            
-            # Determine if the message is spam based on AI response
-            is_spam = "spam" in ai_response.lower()[:10]
-            
-            return jsonify({
-                'text': text_to_analyze,
-                'is_spam': is_spam,
-                'analysis': ai_response
-            })
-        else:
-            return jsonify({'error': f'OpenAI API error: {response.status_code}', 'details': response.text}), 500
+    # Call OpenAI API
+    response = requests.post(
+        "https://api.openai.com/v1/chat/completions",
+        headers=headers,
+        json=payload
+    )
     
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    # Process response
+    if response.status_code == 200:
+        result = response.json()
+        return result['choices'][0]['message']['content']
+    else:
+        raise Exception(f'OpenAI API error: {response.status_code} - {response.text}')
 
 if __name__ == '__main__':
     # Use eventlet for WebSocket support
