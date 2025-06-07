@@ -1,6 +1,7 @@
 import imaplib
 import email
 from email import policy
+from email.message import EmailMessage
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 import pickle
@@ -154,19 +155,33 @@ def fetch_and_process_emails_from_category(category_search, category_name, max_e
                     logger.error(f"Raw email data is not bytes for ID {num}")
                     continue
                     
+                # Parse the email message with the appropriate policy
                 msg = email.message_from_bytes(raw_email, policy=policy.default)
                 sender = msg.get('From', 'Unknown Sender')
                 subject = msg.get('Subject', 'No Subject')
                 
                 logger.info(f"Processing email: {subject}")
                 
-                # Get the email body
-                plain_body = msg.get_body(preferencelist=('plain',))
-                if plain_body:
-                    body = plain_body.get_content()
+                # Get the email body - handle different message types
+                body = ""
+                if msg.is_multipart():
+                    for part in msg.walk():
+                        content_type = part.get_content_type() if hasattr(part, 'get_content_type') else None
+                        if content_type == "text/plain":
+                            payload = part.get_payload(decode=True)
+                            if isinstance(payload, bytes):
+                                body = payload.decode(errors='replace')
+                            break
+                        elif content_type == "text/html" and not body:
+                            payload = part.get_payload(decode=True)
+                            if isinstance(payload, bytes):
+                                body = payload.decode(errors='replace')
                 else:
-                    html_body = msg.get_body(preferencelist=('html',))
-                    body = html_body.get_content() if html_body else ''
+                    payload = msg.get_payload(decode=True)
+                    if isinstance(payload, bytes):
+                        body = payload.decode(errors='replace')
+                    elif isinstance(payload, str):
+                        body = payload
                 
                 # Ensure we have a valid body for processing
                 if not body:
@@ -217,23 +232,33 @@ def fetch_and_process_emails_from_category(category_search, category_name, max_e
                 if is_phishing:
                     logger.warning(f"PHISHING ATTEMPT detected in email: {subject}")
                 
-                # Create and save the email record
-                email_record = Email(
-                    sender=sender, 
-                    subject=subject, 
-                    body=body,
-                    is_spam=is_spam, 
-                    is_phishing=is_phishing,
-                    category=category_name, 
-                    email_date=email_date,
-                    attachment_info=json.dumps(attachment_data) if attachment_data else None
-                )
-                db.session.add(email_record)
-                db.session.commit()
-                
-                # Send an alert if it's a phishing email
-                if is_phishing:
-                    send_alert(email_record)
+                # Create email_record object with explicit parameters
+                try:
+                    # Import here to avoid circular imports
+                    from app import Email, db
+                    
+                    # Create email record using keyword arguments
+                    email_data = {
+                        'sender': sender,
+                        'subject': subject,
+                        'body': body,
+                        'is_spam': is_spam,
+                        'is_phishing': is_phishing,
+                        'category': category_name,
+                        'email_date': email_date,
+                        'attachment_info': json.dumps(attachment_data) if attachment_data else None
+                    }
+                    
+                    email_record = Email(**email_data)
+                    db.session.add(email_record)
+                    db.session.commit()
+                    
+                    # Send an alert if it's a phishing email
+                    if is_phishing:
+                        send_alert(email_record)
+                except Exception as e:
+                    logger.error(f"Error creating email record: {e}", exc_info=True)
+                    continue
                 
                 # Mark the email as read in Gmail
                 mail.store(num, '+FLAGS', '\\Seen')
