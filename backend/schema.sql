@@ -14,7 +14,9 @@ CREATE TABLE emails (
     is_important BOOLEAN DEFAULT FALSE,
     is_archived BOOLEAN DEFAULT FALSE,
     is_read BOOLEAN DEFAULT FALSE,
-    attachment_info TEXT
+    attachment_info TEXT,
+    priority_level INTEGER DEFAULT 0,
+    has_attachment BOOLEAN DEFAULT FALSE
 );
 
 -- Add index on common query fields
@@ -25,6 +27,8 @@ CREATE INDEX idx_email_received_at ON emails(received_at);
 CREATE INDEX idx_email_is_important ON emails(is_important);
 CREATE INDEX idx_email_is_archived ON emails(is_archived);
 CREATE INDEX idx_email_is_read ON emails(is_read);
+CREATE INDEX idx_email_priority_level ON emails(priority_level);
+CREATE INDEX idx_email_has_attachment ON emails(has_attachment);
 
 -- Migration for existing tables (if needed)
 -- This will run only if the table exists but is missing the new columns
@@ -85,6 +89,34 @@ BEGIN
     ) THEN
         ALTER TABLE emails ADD COLUMN attachment_info TEXT;
     END IF;
+    
+    -- Check and add priority_level column if missing
+    IF EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'emails'
+    ) AND NOT EXISTS (
+        SELECT FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'emails' 
+        AND column_name = 'priority_level'
+    ) THEN
+        ALTER TABLE emails ADD COLUMN priority_level INTEGER DEFAULT 0;
+    END IF;
+    
+    -- Check and add has_attachment column if missing
+    IF EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'emails'
+    ) AND NOT EXISTS (
+        SELECT FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'emails' 
+        AND column_name = 'has_attachment'
+    ) THEN
+        ALTER TABLE emails ADD COLUMN has_attachment BOOLEAN DEFAULT FALSE;
+    END IF;
 END
 $$;
 
@@ -105,3 +137,18 @@ CREATE TABLE sender_analytics (
     phishing_count INTEGER DEFAULT 0,
     last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Email actions table for tracking user interactions
+CREATE TABLE email_actions (
+    id SERIAL PRIMARY KEY,
+    email_id INTEGER NOT NULL,
+    action_type VARCHAR(50) NOT NULL, -- 'read', 'mark_spam', 'mark_important', 'archive', etc.
+    action_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    user_id VARCHAR(50),
+    notes TEXT,
+    FOREIGN KEY (email_id) REFERENCES emails(id) ON DELETE CASCADE
+);
+
+-- Index for email actions
+CREATE INDEX idx_email_actions_email_id ON email_actions(email_id);
+CREATE INDEX idx_email_actions_action_type ON email_actions(action_type);
