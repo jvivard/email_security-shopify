@@ -49,7 +49,16 @@ app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}}, supports_credentials=True)
 
 # Helper function to handle CORS options requests
-def handle_cors_options(allowed_methods):
+def handle_cors_options(allowed_methods: str) -> Response:
+    """
+    Helper function to handle CORS preflight OPTIONS requests
+    
+    Parameters:
+    - allowed_methods: Comma-separated list of allowed HTTP methods
+    
+    Returns:
+    - Response object with appropriate CORS headers
+    """
     response = app.make_default_options_response()
     response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
     response.headers['Access-Control-Allow-Methods'] = allowed_methods
@@ -88,6 +97,8 @@ class Email(db.Model):
     is_archived = db.Column(db.Boolean, default=False)
     is_read = db.Column(db.Boolean, default=False)
     attachment_info = db.Column(db.Text)  # Store attachment analysis as JSON string
+    priority_level = db.Column(db.Integer, default=0)
+    has_attachment = db.Column(db.Boolean, default=False)
 
     def serialize(self):
         return {
@@ -101,7 +112,29 @@ class Email(db.Model):
             'is_important': self.is_important,
             'is_archived': self.is_archived,
             'is_read': self.is_read,
-            'attachment_info': self.attachment_info
+            'attachment_info': self.attachment_info,
+            'priority_level': self.priority_level,
+            'has_attachment': self.has_attachment
+        }
+
+# Email Actions Model
+class EmailAction(db.Model):
+    __tablename__ = 'email_actions'
+    id = db.Column(db.Integer, primary_key=True)
+    email_id = db.Column(db.Integer, db.ForeignKey('emails.id'), nullable=False)
+    action_type = db.Column(db.String(50), nullable=False)
+    action_timestamp = db.Column(db.DateTime, default=db.func.now())
+    user_id = db.Column(db.String(50))
+    notes = db.Column(db.Text)
+
+    def serialize(self):
+        return {
+            'id': self.id,
+            'email_id': self.email_id,
+            'action_type': self.action_type,
+            'action_timestamp': self.action_timestamp.isoformat() if self.action_timestamp else None,
+            'user_id': self.user_id,
+            'notes': self.notes,
         }
 
 # Database event listener for real-time updates
@@ -113,15 +146,40 @@ event.listen(Email, 'after_insert', email_created_listener)
 # WebSocket Handlers
 @socketio.on('connect', namespace='/emails')
 def handle_connect():
-    emit('connection_response', {'status': 'connected', 'message': 'Successfully connected to email stream'})
+    """Handle new WebSocket connections to the /emails namespace"""
+    try:
+        # Log the connection
+        logger.info("New client connected to email stream")
+        emit('connection_response', {'status': 'connected', 'message': 'Successfully connected to email stream'})
+    except Exception as e:
+        logger.error(f"Error handling connection: {e}", exc_info=True)
+        emit('error', {'message': 'Connection error occurred'})
 
 @socketio.on('disconnect', namespace='/emails')
 def handle_disconnect():
-    print('Client disconnected from email stream')
+    """Handle WebSocket disconnections from the /emails namespace"""
+    try:
+        # Log the disconnection
+        logger.info('Client disconnected from email stream')
+    except Exception as e:
+        logger.error(f"Error handling disconnection: {e}", exc_info=True)
+
+# Setup error handler for socket events
+@socketio.on_error(namespace='/emails')
+def handle_error(e):
+    """Handle errors in socket.io events"""
+    logger.error(f"SocketIO error: {str(e)}", exc_info=True)
+    emit('error', {'message': 'An error occurred during socket communication'})
+
+@socketio.on_error_default
+def handle_error_default(e):
+    """Handle errors in socket.io events (default handler)"""
+    logger.error(f"Unhandled SocketIO error: {str(e)}", exc_info=True)
 
 # Existing Routes (Updated with SocketIO)
 @app.route('/emails', methods=['OPTIONS', 'GET'])
-def get_emails():
+def get_emails() -> Union[Response, Tuple[Response, int]]:
+    """Get all emails"""
     if request.method == 'OPTIONS':
         return handle_cors_options('GET, OPTIONS')
 
@@ -130,7 +188,8 @@ def get_emails():
 
 # Add endpoint to mark emails as important
 @app.route('/emails/<int:email_id>/mark-important', methods=['OPTIONS', 'PUT'])
-def mark_email_important(email_id):
+def mark_email_important(email_id: int) -> Union[Response, Tuple[Response, int]]:
+    """Toggle important flag for an email"""
     if request.method == 'OPTIONS':
         return handle_cors_options('PUT, OPTIONS')
     
@@ -138,7 +197,8 @@ def mark_email_important(email_id):
 
 # Add endpoint to toggle archive status
 @app.route('/emails/<int:email_id>/toggle-archive', methods=['OPTIONS', 'PUT'])
-def toggle_archive_email(email_id):
+def toggle_archive_email(email_id: int) -> Union[Response, Tuple[Response, int]]:
+    """Toggle archive status for an email"""
     if request.method == 'OPTIONS':
         return handle_cors_options('PUT, OPTIONS')
     
@@ -146,14 +206,15 @@ def toggle_archive_email(email_id):
 
 # Add endpoint to toggle read status
 @app.route('/emails/<int:email_id>/toggle-read', methods=['OPTIONS', 'PUT'])
-def toggle_read_email(email_id):
+def toggle_read_email(email_id: int) -> Union[Response, Tuple[Response, int]]:
+    """Toggle read status for an email"""
     if request.method == 'OPTIONS':
         return handle_cors_options('PUT, OPTIONS')
     
     return update_email_flag(email_id, 'is_read')
 
 # Helper function to update email flags
-def update_email_flag(email_id, flag_name):
+def update_email_flag(email_id: int, flag_name: str) -> Union[Response, Tuple[Response, int]]:
     """
     Helper function to toggle boolean flags on emails
     
@@ -168,18 +229,20 @@ def update_email_flag(email_id, flag_name):
     if not email:
         return jsonify({'error': 'Email not found'}), 404
     
-    # Toggle the specified flag
-    setattr(email, flag_name, not getattr(email, flag_name))
+    current_value = getattr(email, flag_name)
+    setattr(email, flag_name, not current_value)
+    
     db.session.commit()
     
-    # Emit socket event with updated email
+    # Emit a socket event to notify clients of the change
     socketio.emit('email_updated', email.serialize(), namespace='/emails')
     
     return jsonify(email.serialize())
 
 # Add endpoint to delete an email
 @app.route('/emails/<int:email_id>', methods=['OPTIONS', 'DELETE'])
-def delete_email(email_id):
+def delete_email(email_id: int) -> Union[Response, Tuple[Response, int]]:
+    """Delete an email"""
     if request.method == 'OPTIONS':
         return handle_cors_options('DELETE, OPTIONS')
     
@@ -200,7 +263,13 @@ def delete_email(email_id):
     return jsonify({'success': True, 'message': 'Email deleted'})
 
 # Alert System with SocketIO Integration
-def send_alert(email_record):
+def send_alert(email_record: Email) -> None:
+    """
+    Send an alert for a suspicious email
+    
+    Parameters:
+    - email_record: The email record to send an alert for
+    """
     if email_record.is_phishing:
         # Send email alert
         msg = Message("High-Risk Email Detected",
@@ -248,7 +317,8 @@ def run_email_processor() -> Union[Response, Tuple[Response, int]]:
 
 # Add new endpoint to add sample data
 @app.route('/add-sample-data', methods=['GET'])
-def add_sample_data():
+def add_sample_data() -> Union[Response, Tuple[Response, int]]:
+    """Add sample emails to the database"""
     try:
         # Sample data
         sample_emails = [
@@ -312,7 +382,8 @@ def add_sample_data():
 
 # Add endpoint to test text for spam using OpenAI API
 @app.route('/test-spam', methods=['OPTIONS', 'POST'])
-def test_spam():
+def test_spam() -> Union[Response, Tuple[Response, int]]:
+    """Test if a given text is spam using OpenAI API"""
     if request.method == 'OPTIONS':
         return handle_cors_options('POST, OPTIONS')
     
@@ -338,7 +409,7 @@ def test_spam():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-def analyze_text_with_openai(text, system_prompt):
+def analyze_text_with_openai(text: str, system_prompt: str) -> str:
     """
     Analyze text using OpenAI API
     
@@ -391,6 +462,40 @@ def analyze_text_with_openai(text, system_prompt):
         return result['choices'][0]['message']['content']
     else:
         raise Exception(f'OpenAI API error: {response.status_code} - {response.text}')
+
+# Route to log email actions
+@app.route('/emails/<int:email_id>/actions', methods=['OPTIONS', 'POST'])
+def log_email_action(email_id: int) -> Union[Response, Tuple[Response, int]]:
+    """Log an action for a specific email"""
+    if request.method == 'OPTIONS':
+        return handle_cors_options('POST, OPTIONS')
+
+    data = request.get_json()
+    if not data or 'action_type' not in data:
+        return jsonify({'error': 'Missing action_type in request body'}), 400
+
+    email = Email.query.get_or_404(email_id)
+    
+    new_action = EmailAction(
+        email_id=email.id,
+        action_type=data['action_type'],
+        user_id=data.get('user_id'),
+        notes=data.get('notes')
+    )
+    
+    db.session.add(new_action)
+    db.session.commit()
+    
+    # Optionally, you can emit a socket event for real-time updates
+    socketio.emit('email_action', new_action.serialize(), namespace='/emails')
+    
+    return jsonify({'message': 'Action logged successfully', 'action': new_action.serialize()}), 201
+
+@app.route('/emails/search', methods=['OPTIONS', 'GET'])
+def search_emails() -> Union[Response, Tuple[Response, int]]:
+    """Search emails based on a query"""
+    # Implementation of search_emails method
+    pass
 
 if __name__ == '__main__':
     # Use eventlet for WebSocket support
