@@ -97,7 +97,7 @@ class Email(db.Model):
     is_archived = db.Column(db.Boolean, default=False)
     is_read = db.Column(db.Boolean, default=False)
     attachment_info = db.Column(db.Text)  # Store attachment analysis as JSON string
-    priority_level = db.Column(db.Integer, default=0)
+    priority_level = db.Column(db.Integer, default=0)  # 0=normal, 1=low, 2=medium, 3=high
     has_attachment = db.Column(db.Boolean, default=False)
 
     def serialize(self):
@@ -117,16 +117,19 @@ class Email(db.Model):
             'has_attachment': self.has_attachment
         }
 
-# Email Actions Model
+# EmailAction Model
 class EmailAction(db.Model):
     __tablename__ = 'email_actions'
     id = db.Column(db.Integer, primary_key=True)
-    email_id = db.Column(db.Integer, db.ForeignKey('emails.id'), nullable=False)
-    action_type = db.Column(db.String(50), nullable=False)
+    email_id = db.Column(db.Integer, db.ForeignKey('emails.id', ondelete='CASCADE'), nullable=False)
+    action_type = db.Column(db.String(50), nullable=False)  # 'read', 'mark_spam', 'mark_important', etc.
     action_timestamp = db.Column(db.DateTime, default=db.func.now())
     user_id = db.Column(db.String(50))
     notes = db.Column(db.Text)
-
+    
+    # Relationship with Email model
+    email = db.relationship('Email', backref=db.backref('actions', lazy='dynamic', cascade='all, delete-orphan'))
+    
     def serialize(self):
         return {
             'id': self.id,
@@ -134,7 +137,7 @@ class EmailAction(db.Model):
             'action_type': self.action_type,
             'action_timestamp': self.action_timestamp.isoformat() if self.action_timestamp else None,
             'user_id': self.user_id,
-            'notes': self.notes,
+            'notes': self.notes
         }
 
 # Database event listener for real-time updates
@@ -229,12 +232,11 @@ def update_email_flag(email_id: int, flag_name: str) -> Union[Response, Tuple[Re
     if not email:
         return jsonify({'error': 'Email not found'}), 404
     
-    current_value = getattr(email, flag_name)
-    setattr(email, flag_name, not current_value)
-    
+    # Toggle the specified flag
+    setattr(email, flag_name, not getattr(email, flag_name))
     db.session.commit()
     
-    # Emit a socket event to notify clients of the change
+    # Emit socket event with updated email
     socketio.emit('email_updated', email.serialize(), namespace='/emails')
     
     return jsonify(email.serialize())
@@ -462,40 +464,6 @@ def analyze_text_with_openai(text: str, system_prompt: str) -> str:
         return result['choices'][0]['message']['content']
     else:
         raise Exception(f'OpenAI API error: {response.status_code} - {response.text}')
-
-# Route to log email actions
-@app.route('/emails/<int:email_id>/actions', methods=['OPTIONS', 'POST'])
-def log_email_action(email_id: int) -> Union[Response, Tuple[Response, int]]:
-    """Log an action for a specific email"""
-    if request.method == 'OPTIONS':
-        return handle_cors_options('POST, OPTIONS')
-
-    data = request.get_json()
-    if not data or 'action_type' not in data:
-        return jsonify({'error': 'Missing action_type in request body'}), 400
-
-    email = Email.query.get_or_404(email_id)
-    
-    new_action = EmailAction(
-        email_id=email.id,
-        action_type=data['action_type'],
-        user_id=data.get('user_id'),
-        notes=data.get('notes')
-    )
-    
-    db.session.add(new_action)
-    db.session.commit()
-    
-    # Optionally, you can emit a socket event for real-time updates
-    socketio.emit('email_action', new_action.serialize(), namespace='/emails')
-    
-    return jsonify({'message': 'Action logged successfully', 'action': new_action.serialize()}), 201
-
-@app.route('/emails/search', methods=['OPTIONS', 'GET'])
-def search_emails() -> Union[Response, Tuple[Response, int]]:
-    """Search emails based on a query"""
-    # Implementation of search_emails method
-    pass
 
 if __name__ == '__main__':
     # Use eventlet for WebSocket support
