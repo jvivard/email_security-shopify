@@ -9,6 +9,9 @@ A full-stack application for monitoring and securing email communications. Featu
 - Security dashboard with metrics
 - Email categorization and management
 - WebSocket-based real-time updates
+- Email attachment scanning and analysis
+- Priority-based email handling
+- Email action tracking and history
 
 ## Technology Stack
 
@@ -99,10 +102,6 @@ POST /run-email-processor
 ```
 with JSON parameters to customize the fetch criteria.
 
-### Code Style
-
-This project uses a consistent code style. Please ensure your contributions adhere to it.
-
 ## Security Notes
 
 - All sensitive information is stored in environment variables
@@ -134,6 +133,19 @@ This project uses a consistent code style. Please ensure your contributions adhe
 - **Email Processing**: IMAP (for fetching emails)
 - **Machine Learning**: scikit-learn (for spam and phishing detection)
 
+## Data Model
+
+### Email Schema
+- **Core Fields**: id, sender, subject, body, received_at, email_date
+- **Security Fields**: is_spam, is_phishing, attachment_info, has_attachment
+- **Organization Fields**: category, is_important, is_archived, is_read
+- **Priority**: priority_level (0=normal, 1=low, 2=medium, 3=high)
+
+### Email Actions
+- Tracks user interactions with emails (read, mark_spam, mark_important, etc.)
+- Records timestamp and user information for each action
+- Provides audit trail for security operations
+
 ### Frontend
 - **Framework**: Next.js 15.1.7
 - **UI Library**: React 19
@@ -150,6 +162,7 @@ This project uses a consistent code style. Please ensure your contributions adhe
 - **Email Organization**: Categorization and organization of emails
 - **Security Dashboard**: Visual representation of email security metrics
 - **Customizable Processing**: Configure which email categories to process and how many emails to fetch
+- **Attachment Analysis**: Scan email attachments for potential security threats
 
 ## Backend Packages
 
