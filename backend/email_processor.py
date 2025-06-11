@@ -237,6 +237,15 @@ def fetch_and_process_emails_from_category(category_search, category_name, max_e
                     # Import here to avoid circular imports
                     from app import Email, db
                     
+                    # Set priority level based on content analysis
+                    priority_level = 0  # Default: normal
+                    if is_phishing:
+                        priority_level = 3  # High priority for phishing
+                    elif is_spam:
+                        priority_level = 1  # Low priority for spam
+                    elif "urgent" in subject.lower() or "important" in subject.lower():
+                        priority_level = 2  # Medium priority for emails marked urgent or important
+                    
                     # Create email record using keyword arguments
                     email_data = {
                         'sender': sender,
@@ -246,7 +255,9 @@ def fetch_and_process_emails_from_category(category_search, category_name, max_e
                         'is_phishing': is_phishing,
                         'category': category_name,
                         'email_date': email_date,
-                        'attachment_info': json.dumps(attachment_data) if attachment_data else None
+                        'attachment_info': json.dumps(attachment_data) if attachment_data else None,
+                        'priority_level': priority_level,
+                        'has_attachment': bool(attachment_data)  # True if attachments exist
                     }
                     
                     email_record = Email(**email_data)
