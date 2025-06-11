@@ -216,6 +216,71 @@ def toggle_read_email(email_id: int) -> Union[Response, Tuple[Response, int]]:
     
     return update_email_flag(email_id, 'is_read')
 
+# Add endpoint to update priority level
+@app.route('/emails/<int:email_id>/priority', methods=['OPTIONS', 'PUT'])
+def update_priority(email_id: int) -> Union[Response, Tuple[Response, int]]:
+    """Update priority level for an email"""
+    if request.method == 'OPTIONS':
+        return handle_cors_options('PUT, OPTIONS')
+    
+    try:
+        email = Email.query.get(email_id)
+        if not email:
+            return jsonify({'error': 'Email not found'}), 404
+        
+        data = request.get_json()
+        if not data or 'priority_level' not in data:
+            return jsonify({'error': 'Missing priority_level field'}), 400
+        
+        priority_level = data['priority_level']
+        if not isinstance(priority_level, int) or priority_level < 0 or priority_level > 3:
+            return jsonify({'error': 'priority_level must be an integer between 0 and 3'}), 400
+        
+        email.priority_level = priority_level
+        db.session.commit()
+        
+        # Emit socket event for the update
+        socketio.emit('email_updated', email.serialize(), namespace='/emails')
+        
+        return jsonify(email.serialize())
+    except Exception as e:
+        logger.error(f"Error updating email priority: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+# Add endpoint to log email actions
+@app.route('/emails/<int:email_id>/actions', methods=['OPTIONS', 'POST'])
+def log_email_action(email_id: int) -> Union[Response, Tuple[Response, int]]:
+    """Log an action performed on an email"""
+    if request.method == 'OPTIONS':
+        return handle_cors_options('POST, OPTIONS')
+    
+    try:
+        email = Email.query.get(email_id)
+        if not email:
+            return jsonify({'error': 'Email not found'}), 404
+        
+        data = request.get_json()
+        if not data or 'action_type' not in data:
+            return jsonify({'error': 'Missing required fields'}), 400
+        
+        action = EmailAction(
+            email_id=email_id,
+            action_type=data['action_type'],
+            user_id=data.get('user_id'),
+            notes=data.get('notes')
+        )
+        
+        db.session.add(action)
+        db.session.commit()
+        
+        # Emit socket event for the action
+        socketio.emit('email_action', action.serialize(), namespace='/emails')
+        
+        return jsonify(action.serialize()), 201
+    except Exception as e:
+        logger.error(f"Error logging email action: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
 # Helper function to update email flags
 def update_email_flag(email_id: int, flag_name: str) -> Union[Response, Tuple[Response, int]]:
     """
