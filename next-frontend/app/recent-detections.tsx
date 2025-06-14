@@ -1,4 +1,4 @@
-import { Star, Archive, Trash2, Mail, MailOpen } from 'lucide-react';
+import { Star, Archive, Trash2, Mail, MailOpen, Paperclip } from 'lucide-react';
 
 interface Email {
   id: number;
@@ -51,6 +51,7 @@ export default function RecentDetections({
           <thead>
             <tr className="border-b text-sm text-muted-foreground">
               <th className="pb-3 text-left font-medium">Subject</th>
+              <th className="pb-3 text-left font-medium">Priority</th>
               <th className="pb-3 text-left font-medium">Analysis</th>
               <th className="pb-3 text-left font-medium">Service</th>
               <th className="pb-3 text-left font-medium">Policy</th>
@@ -66,7 +67,21 @@ export default function RecentDetections({
               } ${
                 !email.is_read ? 'font-medium' : ''
               }`}>
-                <td className="py-3 font-medium">{email.subject}</td>
+                <td className="py-3 font-medium">
+                  <div className="flex items-center">
+                    {email.subject}
+                    {email.has_attachment && <Paperclip className="w-4 h-4 ml-2 text-gray-400" />}
+                  </div>
+                </td>
+                <td className="py-3">
+                  <span className={`rounded-full px-2 py-1 text-xs ${
+                    email.priority_level === 3 ? 'bg-red-100 text-red-800' :
+                    email.priority_level === 2 ? 'bg-orange-100 text-orange-800' :
+                    email.priority_level === 1 ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
+                  }`}>
+                    {email.priority_level === 3 ? 'High' : email.priority_level === 2 ? 'Medium' : email.priority_level === 1 ? 'Low' : 'Normal'}
+                  </span>
+                </td>
                 <td className="py-3">
                   <span className={`rounded-full px-2 py-1 text-xs ${
                     email.is_phishing ? 'bg-red-100 text-red-800' :
