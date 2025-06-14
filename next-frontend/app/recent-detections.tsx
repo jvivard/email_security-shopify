@@ -11,6 +11,8 @@ interface Email {
   is_important: boolean;
   is_archived: boolean;
   is_read: boolean;
+  priority_level: number;
+  has_attachment: boolean;
 }
 
 interface RecentDetectionsProps {
