@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import io from 'socket.io-client';
-import type { Socket } from 'socket.io-client';
-import { Bug, ShieldAlert, ShieldX, SpellCheckIcon as Spam, Star } from 'lucide-react';
+import { type Socket as SocketClient } from 'socket.io-client';
+import { Bug, ShieldAlert, ShieldX, SpellCheckIcon as Spam, Star, TrendingUp } from 'lucide-react';
 import DetectionChart from '../components/detection-chart';
 import DetectionOverview from './detection-overview';
 import RecentDetections from './recent-detections';
@@ -24,13 +24,15 @@ interface Email {
   is_important: boolean;
   is_archived: boolean;
   is_read: boolean;
+  priority_level: number;
+  has_attachment: boolean;
 }
 
 const SecurityDashboard = () => {
   const [emails, setEmails] = useState<Email[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [socket, setSocket] = useState<Socket | null>(null);
+  const [socket, setSocket] = useState<ReturnType<typeof io> | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [processingResult, setProcessingResult] = useState<any>(null);
 
@@ -227,30 +229,37 @@ const SecurityDashboard = () => {
       detections: emails.filter(e => e.category === 'Malware').length,
       icon: Bug,
       color: 'text-blue-500',
-      trend: emails.filter(e => e.category === 'Malware').length > 0 ? 'up' : 'neutral'
     },
     { 
       title: 'Phishing', 
       detections: emails.filter(e => e.is_phishing).length,
       icon: ShieldAlert,
       color: 'text-green-500',
-      trend: 'constant'
     },
     { 
       title: 'Total Detections', 
       detections: emails.length,
       icon: ShieldX,
       color: 'text-yellow-500',
-      trend: emails.length > 0 ? 'up' : 'neutral'
     },
     { 
       title: 'Spam', 
       detections: emails.filter(e => e.is_spam).length,
       icon: Spam,
       color: 'text-purple-500',
-      trend: 'down'
     },
+    { 
+      title: 'Important', 
+      detections: emails.filter(e => e.is_important).length,
+      icon: Star,
+      color: 'text-orange-500',
+    }
   ], [emails]);
+
+  const overviewProps = {
+    totalDetections: emails.length,
+    percentageChange: 2.5, // Dummy data, replace with actual calculation
+  };
 
   // Loading state
   if (loading) {
@@ -330,10 +339,9 @@ const SecurityDashboard = () => {
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <DetectionOverview 
           totalDetections={emails.length} 
-          riskLevel={emails.filter(e => e.is_phishing).length > 0 ? 'High' : 'Normal'}
-          connectionStatus={socket?.connected ? 'live' : 'offline'}
+          percentageChange={2.5}
         />
-        <DetectionChart data={emails} />
+        <DetectionChart />
       </section>
 
       <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -344,7 +352,6 @@ const SecurityDashboard = () => {
             detections={metric.detections}
             icon={metric.icon}
             color={metric.color}
-            trend={metric.trend}
           />
         ))}
       </section>
