@@ -25,6 +25,9 @@ CREATE INDEX idx_email_received_at ON emails(received_at);
 CREATE INDEX idx_email_is_important ON emails(is_important);
 CREATE INDEX idx_email_is_archived ON emails(is_archived);
 CREATE INDEX idx_email_is_read ON emails(is_read);
+CREATE INDEX idx_email_sender ON emails(sender);
+CREATE INDEX idx_email_recipient ON emails(recipient);
+CREATE INDEX idx_email_subject ON emails(subject);
 
 -- 2. Blacklist table
 CREATE TABLE blacklist (
