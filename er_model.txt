@@ -29,6 +29,7 @@
 - **spam_count** INTEGER
 - **phishing_count** INTEGER
 - **last_seen** TIMESTAMP
+-**detected**INTEGER
 
 ## Relationships
 
