@@ -13,7 +13,6 @@
 - **is_phishing** BOOLEAN
 - **category** VARCHAR(50)
 - **is_important** BOOLEAN
-- **is_archived** BOOLEAN
 
 ### Blacklist
 - **id** (PK) SERIAL
