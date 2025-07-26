@@ -12,7 +12,7 @@ from pathlib import Path
 env_file = Path(".env")
 
 if env_file.exists():
-    print("Warning: .env file already exists.")
+    print("Warning: .env file already exist.")
     overwrite = input("Do you want to overwrite it? (y/n): ")
     if overwrite.lower() != "y":
         print("Exiting without changes.")
