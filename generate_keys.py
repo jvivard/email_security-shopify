@@ -35,7 +35,7 @@ MAIL_PASSWORD=your_email_password_here
 SECRET_KEY={secret_key}
 
 # OpenAI API Key (if needed)
-OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_API_KEY=your_openai_api_key
 """)
 
 print(f"Created .env file with secure keys.")
