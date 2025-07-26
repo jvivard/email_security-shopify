@@ -29,7 +29,6 @@ CREATE INDEX idx_email_sender ON emails(sender);
 CREATE INDEX idx_email_recipient ON emails(recipient);
 CREATE INDEX idx_email_subject ON emails(subject);
 
--- 2. Blacklist table
 CREATE TABLE blacklist (
     id SERIAL PRIMARY KEY,
     entity VARCHAR(255) UNIQUE NOT NULL, -- Domain or email address
