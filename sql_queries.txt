@@ -1,7 +1,6 @@
 -- SQL QUERIES 
 
 -- TABLE CREATION SYNTAX
--- 1. Emails table
 CREATE TABLE emails (
     id SERIAL PRIMARY KEY,
     sender VARCHAR(255) NOT NULL,
