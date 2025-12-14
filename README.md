@@ -1,7 +1,7 @@
 # Email Security System
 <img width="1263" height="702" alt="image" src="https://github.com/user-attachments/assets/16bd4b80-5cc2-4d34-84b7-a058019711d0" />
 
-
+<img width="1287" height="723" alt="image" src="https://github.com/user-attachments/assets/361e1241-4ea9-4246-a94a-b8f93a892aa1" />
 
 A full-stack application for monitoring and securing email communications. Features include spam detection, phishing detection, and a real-time security dashboard.
 
